@@ -16,7 +16,7 @@ public:
 	Stroke();
 	~Stroke();
 
-	vector<TouchPoint> getStrokePoints();
+	vector<TouchPoint>& getStrokePoints();
 	void addStrokePoint(TouchPoint point);
 
 	Point2f getStrokeDirection();
@@ -33,6 +33,20 @@ public:
 
 	void setGain(vector<Stroke*> strokes);
 	float getGain();
+
+	void setEllipseParameters(float X0,float Y0, float a,float b,float long_axis, float short_axis,float cos_phi,float sin_phi);
+
+	float getX0();
+	float getY0();
+	float getA();
+	float getB();
+	float getLong_axis();
+	float getShort_axis();
+	float getCos_phi();
+	float getSin_phi();
+
+
+
 private:
 	vector<TouchPoint> strokePoints;
 	Point2f direction;
@@ -41,6 +55,23 @@ private:
 	int64 endTick;
 	float frequence;
 	float gain;
+
+	float a;
+	float b;
+
+	float long_axis;
+	float short_axis;
+
+	
+
+	float X0;
+	float Y0;
+
+	float cos_phi;
+	float sin_phi;
+
+	
+
 };
 
 class CycloDetector
@@ -64,9 +95,18 @@ public:
 	void cancelPan();
 	//Cyclo zoom
 	void cycloZoom();
+
+	void cycloCheck();
+
 	void startPan(int64 tickCount);
 
-	void fitStroke2Ellispe(Stroke stroke);
+	void fitStroke2Ellispe(Stroke& stroke);
+	void fitStroke2Ellispe(Stroke& stroke1,Stroke&stroke2);
+	void fitStroke2Circle(Stroke& stroke1,Stroke&stroke2);
+	//Get mean value of a vector
+	float mean(vector<float> coordinates);
+	//Reduce a value for each element 
+	void reduce(vector<float>& coordinates, float value);
 private:
 	Touch touch;
 	//The list of touch points of the last frame

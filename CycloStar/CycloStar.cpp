@@ -12,6 +12,25 @@ using namespace cv;
 using namespace std;
 
 
+float mean(vector<float> coordinates)
+{
+	float mean=0;
+	for(int i=0;i<coordinates.size();++i)
+	{
+		mean+=coordinates[i];
+	}
+
+	return mean/=coordinates.size();
+}
+
+void reduce(vector<float>& coordinates, float value)
+{
+	for(int i=0;i<coordinates.size();++i)
+	{
+		coordinates[i]-=value;
+	}
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
 	CycloDetector cycloDetector;
@@ -20,50 +39,78 @@ int _tmain(int argc, _TCHAR* argv[])
 	{
 		cycloDetector.detectTouch();
 		//cycloDetector.cycloPan();
-		cycloDetector.cycloZoom();
+		//cycloDetector.cycloZoom();
+		cycloDetector.cycloCheck();
 
 		Mat ellipse=Mat::zeros(480,640,CV_8UC3);
 		vector<Point> ellipsePoints;
+		vector<Point> ellipseRPoints;
 		vector<float>X;
 		vector<float>Y;
+		vector<float>Xr;
+		vector<float>Yr;
+		int m=180;
 
-		float mean_x=200;
-		float mean_y=200;
+		float xcenter=200;
+		float ycenter=200;
 
-		for(int i=0;i<360;++i)
+		float aInit=100;
+		float bInit=50;
+		float angle=45*CV_PI/180;
+
+		for(int i=0;i<m;++i)
 		{
-			ellipsePoints.push_back(Point(100*cos(CV_PI/180*i)+200,50*sin(CV_PI/180*i)+200));
-			cv::circle(ellipse,Point(100*cos(CV_PI/180*i)+200,50*sin(CV_PI/180*i)+200),1,Scalar(0,255,0));
-			X.push_back(100*cos(CV_PI/180*i));
-			Y.push_back(50*sin(CV_PI/180*i));
+			
+			float x=aInit*cos(CV_PI/180*i)+xcenter;
+			float y=bInit*sin(CV_PI/180*i)+ycenter;
+			X.push_back(x);
+			Y.push_back(y);
+
+			float xr=(x-xcenter)*cos(angle)-(y-ycenter)*sin(angle)+xcenter;
+			float yr=(x-xcenter)*sin(angle)+(y-ycenter)*cos(angle)+ycenter;
+			Xr.push_back(xr);
+			Yr.push_back(yr);
+
+			ellipsePoints.push_back(Point(x,y));
+			cv::circle(ellipse,Point(x,y),1,Scalar(0,255,0));
+			ellipseRPoints.push_back(Point(xr,yr));
+			cv::circle(ellipse,Point(xr,yr),1,Scalar(0,255,255));
+
+
 		}
+
+		float mean_x=mean(Xr);
+		float mean_y=mean(Yr);
+
+		reduce(Xr,mean_x);
+		reduce(Yr,mean_y);
 
 		Mat D=Mat::zeros(360,5,CV_32FC1);
 		float* pointerD=(float*)D.data;
 
-		for(int i=0;i<360;++i)
+		for(int i=0;i<m;++i)
 		{
-			D.at<float>(i,0)=X[i]*X[i];
-			D.at<float>(i,1)=X[i]*Y[i];
-			D.at<float>(i,2)=Y[i]*Y[i];
-			D.at<float>(i,3)=X[i];
-			D.at<float>(i,4)=Y[i];
+			D.at<float>(i,0)=Xr[i]*Xr[i];
+			D.at<float>(i,1)=Xr[i]*Yr[i];
+			D.at<float>(i,2)=Yr[i]*Yr[i];
+			D.at<float>(i,3)=Xr[i];
+			D.at<float>(i,4)=Yr[i];
 		}
 
+		//std::cout<<"D'*D "<<D.t()*D<<std::endl;
 		Mat sumD=Mat::zeros(1,5,CV_32FC1);
 		for(int j=0;j<5;++j)
 		{
-			for(int i=0;i<360;++i)
+			for(int i=0;i<m;++i)
 			{
-				sumD.at<float>(0,j)=sumD.at<float>(0,j)+D.at<float>(i,j);
-				
+				sumD.at<float>(0,j)=sumD.at<float>(0,j)+D.at<float>(i,j);		
 			}
-			/*std::cout<<sumD.at<float>(1,j)<<std::endl;*/
 		}
 	
 		
 		Mat A=sumD*(D.t()*D).inv();
-		std::cout<<A<<std::endl;
+	
+		//std::cout<<A<<std::endl;
 
 		float a=A.at<float>(0,0);
 		float b=A.at<float>(0,1);
@@ -77,7 +124,6 @@ int _tmain(int argc, _TCHAR* argv[])
 		float cos_phi;
 		float sin_phi;
 		
-
 		
 		if(std::min(abs(b/a),abs(b/c))>orientation_tolerance)
 		{
@@ -99,8 +145,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			float mean_xtemp=mean_x;
 			float mean_ytemp=mean_y;
 
-			float mean_x=cos_phi*mean_xtemp - sin_phi*mean_ytemp;
-			float mean_y=sin_phi*mean_xtemp + cos_phi*mean_ytemp;
+			mean_x=cos_phi*mean_xtemp - sin_phi*mean_ytemp;
+			mean_y=sin_phi*mean_xtemp + cos_phi*mean_ytemp;
 		}
 		else
 		{
@@ -124,110 +170,29 @@ int _tmain(int argc, _TCHAR* argv[])
 
 				float X0=mean_x-d/2/a;
 				float Y0=mean_y-e/2/c;
-				std::cout<<X0<<" "<<Y0<<std::endl;
+				
 				float F=1 + (d*d)/(4*a) + (e*e)/(4*c);
 				a=sqrt(F/a);
 				b=sqrt(F/c);
 
 				float long_axis=2*max(a,b);
 				float short_axis=2*min(a,b);
+				//std::cout<<"X0 "<<X0<<" Y0 "<<Y0<<" a "<<a<<" b "<<b<<" long "<<long_axis<<" short "<<short_axis<<" angle "<<orientation_rad<<std::endl;				
 
-				std::cout<<long_axis<<std::endl;
-				std::cout<<short_axis<<std::endl;
+				cv::Matx22f R(cos_phi,sin_phi,-sin_phi,cos_phi);
 			
+				for(int i=0;i<360;++i)
+				{
+					float xinit=X0 + a*cos( CV_PI/180*i );
+					float yinit=Y0 + b*sin( CV_PI/180*i );
+
+					cv::Matx21f initialPoint(xinit,yinit);
+					cv::Matx21f rotatedPoint=R*initialPoint;
+
+					cv::circle(ellipse,Point(rotatedPoint(0),rotatedPoint(1)),1,Scalar(0,0,255));
+				}
 		}
-		//Mat S=Mat::zeros(6,6,CV_32FC1);
-		//Mat D=Mat::zeros(360,6,CV_32FC1);
-		//float* pointerD=(float*)D.data;
-
-		//for(int i=0;i<360;++i)
-		//{
-		//	float x=100*cos(CV_PI/180*i)+200;
-		//	float y=50*sin(CV_PI/180*i)+200;
-
-		//	D.at<float>(i,0)=x*x;
-		//	D.at<float>(i,1)=x*y;
-		//	D.at<float>(i,2)=y*y;
-		//	D.at<float>(i,3)=x;
-		//	D.at<float>(i,4)=y;
-		//	D.at<float>(i,5)=1;
-		//	//*(pointerD+i*6)=x*x;
-		//	//*(pointerD+i*6+1)=x*y;
-		//	//*(pointerD+i*6+2)=y*y;
-		//	//*(pointerD+i*6+3)=x;
-		//	//*(pointerD+i*6+4)=y;
-		//	//*(pointerD+i*6+5)=1;
-		//}
-
-		//S=D.t()*D;
-		///*for(int i=0;i<360;++i)
-		//{
-		//	float x=100*cos(CV_PI/180*i)+200;
-		//	float y=50*sin(CV_PI/180*i)+200;
-
-		//	Mat D=Mat::zeros(1,6,CV_32FC1);
-		//	D.at<float>(0,0)=x*x;
-		//	D.at<float>(0,1)=x*y;
-		//	D.at<float>(0,2)=y*y;
-		//	D.at<float>(0,3)=x;
-		//	D.at<float>(0,4)=y;
-		//	D.at<float>(0,5)=1;
-
-		//	S+=D.t()*D;
-		//}*/
-
-
-		//Mat C=Mat::zeros(6,6,CV_32FC1);
-		//C.at<float>(0,2)=2.0;
-		//C.at<float>(1,1)=-1.0;
-		//C.at<float>(2,0)=2.0;
-
-
-		//
-		//Mat eigenMatrix=S.inv()*C;
-
-
-		//Mat eigenValues=Mat::zeros(6,1,CV_32FC1);
-		//Mat eigenVectors=Mat::zeros(6,6,CV_32FC1);
-
-		//cv::eigen(eigenMatrix,true,eigenValues,eigenVectors);
-
-		//int maxIndex=0;
-		//int maxEigenValue=eigenValues.at<float>(0,0);
-		//for(int i=1;i<6;++i)
-		//{
-		//	if(eigenValues.at<float>(i,0)>maxEigenValue)
-		//	{
-		//		maxIndex=i;
-		//		maxEigenValue=eigenValues.at<float>(i,0);
-		//	}
-		//}
-		//std::cout<<"eigen value "<<eigenValues<<std::endl;
-		//Mat A=eigenVectors.col(maxIndex);
-
-		//float b=A.at<float>(1,0)/2;
-		//float c=A.at<float>(2,0);
-		//float d=A.at<float>(3,0)/2;
-		//float f=A.at<float>(4,0)/2;
-		//float g=A.at<float>(5,0);
-		//float a=A.at<float>(0,0);
-
-		//float num=b*b-a*c;
-		//float x0=(c*d-b*f)/num;
-		//float y0=(a*f-b*d)/num;
-
-		//Point ellipseCenter(x0,y0);
-
-		//float rotationAngle=0.5*std::atan(2*b/(a-c));
-
-		//float up=2*(a*f*f+c*d*d+g*b*b-2*b*d*f-a*c*g);
-		//float down1=(b*b-a*c)*( (c-a)*sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a));
-		//float down2=(b*b-a*c)*( (a-c)*sqrt(1+4*b*b/((a-c)*(a-c)))-(c+a));
-
-		//float res1=sqrt(up/down1);
-		//float res2=sqrt(up/down2);
-
-		//std::cout<<"center "<<ellipseCenter<<std::endl;
+		
 
 		imshow("ellipse",ellipse);
 
